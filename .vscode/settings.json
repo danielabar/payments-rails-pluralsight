@@ -1,0 +1,8 @@
+{
+  "ruby.lint": {
+  "rubocop": false,
+  "reek": false,
+  "debride": false,
+  "fasterer": false,
+  }
+}
