@@ -10,6 +10,8 @@
     - [Devise](#devise)
     - [Creating the Navigation Bar](#creating-the-navigation-bar)
   - [Creating Publications](#creating-publications)
+  - [Publication Model](#publication-model)
+    - [Admin and Subscriber Modelling](#admin-and-subscriber-modelling)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
@@ -433,3 +435,128 @@ Refresh home view while signed in, now nav displays email address:
 ![nav signed in as](doc-images/nav-signed-in-as.png "nav signed in as")
 
 ## Creating Publications
+
+**Publication**
+- Digital file that paying subscribers can access.
+- Will be lightweight for this course as the details are not relevant for payments, which is the focus. Just have title, file_url and description.
+
+**Administrators**
+- Users with ability to CRUD publications.
+- Have `is_admin` set to true (boolean field).
+- We will seed an admin initially, then can create more via console.
+- Ruby gems for handling admin roles include: `cancan`, `pundit`, `rolify`. But for this app, will use more basic implementation.
+
+**Administrator and Subscriber Views**
+- Admins can create, edit, update publications
+- Subscribers can only view publications
+- Non-subscribers can see publications, but not access the details
+
+**Adminstrator Publication Routes**
+![admin pub routes](doc-images/admin-publication-routes.png "admin pub routes")
+
+**Subscriber Publication Routes**
+![subscriber pub routes](doc-images/subscriber-publication-routes.png "subscriber pub routes")
+
+**Non-Subscriber Publication Routes**
+![non subscriber pub routes](doc-images/non-subscriber-publication-routes.png "non subscriber pub routes")
+
+## Publication Model
+
+Use Rails model generator, passing in desired attributes, then migrate the database:
+
+```
+bin/rails g model publication title:string description:text file_url:string
+bin/rails db:migrate
+```
+
+Add publication routes using `resources` method, with `only` argument to limit what routes are generated to the read ones:
+
+```ruby
+# subscription-app/config/routes.rb
+Rails.application.routes.draw do
+  devise_for :users
+  root to: "home#index"
+  resources :publications, only: [:index, :show]
+end
+```
+
+Create the view files and controller
+
+```bash
+mkdir app/views/publications
+touch app/views/publications/index.html.erb
+touch app/views/publications/show.html.erb
+touch app/controllers/publications_controller.rb
+```
+
+Implement controller logic:
+
+```ruby
+# subscription-app/app/controllers/publications_controller.rb
+class PublicationsController < ApplicationController
+  def index
+    @publicatiosn = Publication.all
+  end
+
+  def show
+    @publication = Publication.find(params[:id])
+  end
+end
+```
+
+Implement index view - uses `panel` bootstrap component to render list of all publications, displaying each publication's title, description, file_url, and a link to the detail view (aka show). Note that `publication_path` requires the `publication` as an argument in order to generate a url like `/publications/:id`
+
+```erb
+<!-- subscription-app/app/views/publications/index.html.erb -->
+<h2>Publications</h2>
+
+<% @publications.each do |publication| %>
+  <div class="panel panel-default">
+    <div class="panel-heading">
+      <h3 class="panel-title"><%= publication.title %></h3>
+    </div>
+    <div class="panel-body">
+      <p><%= publication.title %></p>
+      <p><%= publication.file_url %></p>
+    </div>
+    <div class="panel-footer">
+      <%= link_to "View more details", publication_path(publication), class: "btn btn-default" %>
+    </div>
+  </div>
+<% end %>
+```
+
+Create a publication in Rails console so we'll have something to see in the UI:
+
+```ruby
+p = Publication.new(title: "My first publication", description: "This is my first publication", file_url:
+"http://myfilelocation.com")
+p.save
+```
+
+Start server and navigate to `http://localhost:3000/publications`:
+
+![publications index](doc-images/publications-index.png "publications index")
+
+Fill in template for publication show view (i.e. showing the details of the selected publication):
+
+```erb
+<!-- subscription-app/app/views/publications/show.html.erb -->
+<h2>Publication Details</h2>
+
+<div class="panel panel-default">
+  <div class="panel-heading">
+    <h3 class="panel-title"><%= @publication.title %></h3>
+  </div>
+  <div class="panel-body">
+    <p><%= @publication.title %></p>
+    <p><%= @publication.file_url %></p>
+  </div>
+</div>
+```
+
+Now you can click on the Show Detail button from index view, which navigates to `http://localhost:3000/publications/1`:
+
+![show view](doc-images/show-view.png "show view")
+
+### Admin and Subscriber Modelling
