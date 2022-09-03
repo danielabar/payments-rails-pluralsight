@@ -560,3 +560,157 @@ Now you can click on the Show Detail button from index view, which navigates to 
 ![show view](doc-images/show-view.png "show view")
 
 ### Admin and Subscriber Modelling
+
+Want to support feature that some users could be administrators:
+
+```
+rails g migration add_is_admin_to_users is_admin:boolean
+```
+
+Generates:
+
+```ruby
+# subscription-app/db/migrate/20220903112034_add_is_admin_to_users.rb
+class AddIsAdminToUsers < ActiveRecord::Migration[6.1]
+  def change
+    add_column :users, :is_admin, :boolean
+  end
+end
+```
+
+For a boolean column, want to ensure it can never be null. Only expect to find true or false in this column. Use `null` and `default` options to ensure this column can never be null and defaults to false:
+
+```ruby
+# subscription-app/db/migrate/20220903112034_add_is_admin_to_users.rb
+class AddIsAdminToUsers < ActiveRecord::Migration[6.1]
+  def change
+    add_column :users, :is_admin, :boolean, null: false, default: false
+  end
+end
+```
+
+Run migration: `bin/rails db:migrate`. Then launch console: `bin/rails c`, and check `is_admin` property on user we created earlier. Notice that it's been set to false:
+
+```ruby
+User.last
+=> #<User id: 1, email: "test1@test.com", created_at: "2022-08-01 12:05:19.855459000 +0000", updated_at: "2022-08-01 12:05:19.855459000 +0000", is_admin: false>
+```
+
+Let's create an admin user via seeds:
+
+```ruby
+# subscription-app/db/seeds.rb
+User.create(
+  email: 'subscription_admin@test.com',
+  password: 'password',
+  is_admin: true
+)
+```
+
+Run it with `bin/rails db:seed`. Now there's one regular and one admin user in the database:
+
+```ruby
+User.all.each{ |user| puts("#{user.email}, is_admin: #{user.is_admin}") }
+# test1@test.com, is_admin: false
+# subscription_admin@test.com, is_admin: true
+```
+
+Add admin routes. Use `namespace` feature to create similar routing paths as publications, but under `/admin...`:
+
+```ruby
+# subscription-app/config/routes.rb
+Rails.application.routes.draw do
+  devise_for :users
+  root to: "home#index"
+  resources :publications, only: [:index, :show]
+  namespace :admin do
+    resources :publications
+  end
+end
+```
+
+Here are the admin routes this generates: `bin/rails routes | grep admin`
+
+```
+admin_publications      GET   /admin/publications(.:format)                                                                     admin/publications#index
+                       POST   /admin/publications(.:format)                                                                     admin/publications#create
+ new_admin_publication GET    /admin/publications/new(.:format)                                                                 admin/publications#new
+edit_admin_publication GET    /admin/publications/:id/edit(.:format)                                                            admin/publications#edit
+     admin_publication GET    /admin/publications/:id(.:format)                                                                 admin/publications#show
+                       PATCH  /admin/publications/:id(.:format)                                                                 admin/publications#update
+                       PUT    /admin/publications/:id(.:format)                                                                 admin/publications#update
+                       DELETE /admin/publications/:id(.:format)                                                                 admin/publications#destroy
+```
+
+Create an admin controller with a `before_filter` to ensure that the currently logged in user is an admin before letting them proceed. If they are not, or if there is no logged in user, then they'll be redirected to the home page with a flash alert.
+
+`before_filter`: The passed filters will be appended to the filter_chain and will execute before the action on this controller is performed.
+
+```ruby
+# subscription-app/app/controllers/admin_controller.rb
+class AdminController < ApplicationController
+  before_filter :check_for_admin
+
+  def check_for_admin
+    if currnet_user.nil? || !current_user.is_admin?
+      redirect_to root_path, alert: "You must be an admin to access this path."
+    end
+  end
+end
+```
+
+Add the admin publications controller. Note that it inherits from `AdminController` to get the `check_for_admin` filter:
+
+```ruby
+# subscription-app/app/controllers/admin/publications_controller.rb
+class PublicationsController < AdminController
+  before_filter :find_publication, only: [:show, :edit, :update, :destroy]
+
+  def index
+    @publications = Publication.all
+  end
+
+  def show; end
+
+  def new
+    @publication = Publication.new
+  end
+
+  def create
+    @publication = Publication.new(publication_params)
+
+    if @publication.save
+      redirect_to admin_publication_path(@publication)
+    else
+      render :new, alert: "Something went wrong."
+    end
+  end
+
+  def edit; end
+
+  def update
+    if @publication.update(publication_params)
+      redirect_to admin_publication_path(@publication)
+    else
+      render :edit, alert: "Something went wrong."
+    end
+  end
+
+  def destroy
+    @publication.destroy
+    redirect_to admin_publications_path, alert: "Successfully deleted publication."
+  end
+
+  private
+
+  def find_publication
+    @publication = Publication.find(params[:id])
+  end
+
+  def publication_params
+    params.require(:publication).permit(:title, :description, :file_url)
+  end
+end
+```
+
+Rails Guide on [render and redirect_to](https://guides.rubyonrails.org/layouts_and_rendering.html)
