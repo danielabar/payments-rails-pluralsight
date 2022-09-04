@@ -1,5 +1,5 @@
-class PublicationsController < AdminController
-  before_filter :find_publication, only: [:show, :edit, :update, :destroy]
+class Admin::PublicationsController < AdminController
+  before_action :find_publication, only: [:show, :edit, :update, :destroy]
 
   def index
     @publications = Publication.all

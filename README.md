@@ -642,29 +642,33 @@ edit_admin_publication GET    /admin/publications/:id/edit(.:format)            
                        DELETE /admin/publications/:id(.:format)                                                                 admin/publications#destroy
 ```
 
-Create an admin controller with a `before_filter` to ensure that the currently logged in user is an admin before letting them proceed. If they are not, or if there is no logged in user, then they'll be redirected to the home page with a flash alert.
+Create an admin controller with a `before_action` to ensure that the currently logged in user is an admin before letting them proceed. If they are not, or if there is no logged in user, then they'll be redirected to the home page with a flash alert.
 
-`before_filter`: The passed filters will be appended to the filter_chain and will execute before the action on this controller is performed.
+`before_action`: Append a callback before actions. Instructor used `before_filter` but I got error about undefined method.
 
 ```ruby
 # subscription-app/app/controllers/admin_controller.rb
 class AdminController < ApplicationController
-  before_filter :check_for_admin
+  before_action :check_for_admin
 
   def check_for_admin
-    if currnet_user.nil? || !current_user.is_admin?
+    if current_user.nil? || !current_user.is_admin?
       redirect_to root_path, alert: "You must be an admin to access this path."
     end
   end
 end
 ```
 
-Add the admin publications controller. Note that it inherits from `AdminController` to get the `check_for_admin` filter:
+Add the admin publications controller. Note that it inherits from `AdminController` to get the `check_for_admin` filter. Also note private method `find_publication` to avoid code duplication in various methods that all need to find a publication by id.
+
+`publication_params` is a private method using Rails Strong Params. It looks for a hash `publication` in the request params, and then ensures that it only contains the given list of attributes.
+
+Note I had to namespace `Admin::PublicationsController` for class name, otherwise got super class mismatch error due to `PublicationsController` already existing under app/controllers and inheriting from ApplicationController.
 
 ```ruby
 # subscription-app/app/controllers/admin/publications_controller.rb
-class PublicationsController < AdminController
-  before_filter :find_publication, only: [:show, :edit, :update, :destroy]
+class Admin::PublicationsController < AdminController
+  before_action :find_publication, only: [:show, :edit, :update, :destroy]
 
   def index
     @publications = Publication.all
@@ -713,4 +717,68 @@ class PublicationsController < AdminController
 end
 ```
 
-Rails Guide on [render and redirect_to](https://guides.rubyonrails.org/layouts_and_rendering.html)
+Rails Guide on [render and redirect_to](https://guides.rubyonrails.org/layouts_and_rendering.html).
+
+Run Rails server, then try to navigate to `http://localhost:3000/admin/publications`, will get redirected to root `http://localhost:3000` with message that you must be admin to access this page:
+
+![you must be admin](doc-images/you-must-be-admin.png "you must be admin")
+
+Login with `subscription_admin@test.com` which has `is_admin` set to true, then navigate to `http://localhost:3000/admin/publications`. This time get error: `Admin::PublicationsController#index is missing a template for request formats: text/html`.
+
+Let's add the view. It will look similar to what regular users see, but an additional link/button to edit each publication. Also make sure the view button links to the admin version of this.
+
+Note: To find the correct `XXX_path` helper method names, run `bin/rails routes | grep "admin"`.
+
+```erb
+<!-- subscription-app/app/views/admin/publications/index.html.erb -->
+<h2>Admin Publications</h2>
+
+<% @publications.each do |publication| %>
+  <div class="panel panel-default">
+    <div class="panel-heading">
+      <h3 class="panel-title"><%= publication.title %></h3>
+    </div>
+    <div class="panel-body">
+      <p><%= publication.title %></p>
+      <p><%= publication.file_url %></p>
+    </div>
+    <div class="panel-footer">
+      <%= link_to "View more details", admin_publication_path(publication), class: "btn btn-info" %>
+      <%= link_to "Edit", edit_admin_publication_path(publication), class: "btn btn-default" %>
+    </div>
+  </div>
+<% end %>
+```
+
+Here is what the `http://localhost:3000/admin/publications` view looks like now:
+
+![admin publications view](doc-images/admin-publications-view.png "admin publications view")
+
+Let's build the edit template so that it will work when admin user clicks the edit button from this view. The edit view uses `form_for` Rails view helper to build the form, together with Bootstrap classes `form-group`, `form-control`, etc for styling.
+
+```erb
+<!-- subscription-app/app/views/admin/publications/edit.html.erb -->
+<h3>Edit <%= @publication.title %></h3>
+
+<%= form_for @publication, url: admin_publication_path(@publication) do |f| %>
+  <div class="form-group">
+    <label>Title</label>
+    <%= f.text_field :title, class: 'form-control' %>
+  </div>
+  <div class="form-group">
+    <label>Description</label>
+    <%= f.text_area :description, class: 'form-control' %>
+  </div>
+  <div class="form-group">
+    <label>File URL</label>
+    <%= f.text_field :file_url, class: 'form-control' %>
+  </div>
+  <div class="form-group">
+    <%= f.submit "Update Publication", class: 'btn btn-primary' %>
+  </div>
+<% end %>
+```
+
+Note that the generated form will POST to `admin_publication_path(@publication)`. This will get translated by Rails to a PATCH to `/admin/publications/:id`, which will run the `update` method in `subscription-app/app/controllers/admin/publications_controller.rb`.
+
+Left at 6:04
