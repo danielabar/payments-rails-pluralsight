@@ -12,6 +12,7 @@
   - [Creating Publications](#creating-publications)
   - [Publication Model](#publication-model)
     - [Admin and Subscriber Modelling](#admin-and-subscriber-modelling)
+  - [Introduce the Stripe API](#introduce-the-stripe-api)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
@@ -781,4 +782,116 @@ Let's build the edit template so that it will work when admin user clicks the ed
 
 Note that the generated form will POST to `admin_publication_path(@publication)`. This will get translated by Rails to a PATCH to `/admin/publications/:id`, which will run the `update` method in `subscription-app/app/controllers/admin/publications_controller.rb`.
 
-Left at 6:04
+Note the use of `f.text_field` for publication title and file_url, whereas `f.text_area` used for publication description. This is because title and file_url are `string` type in the database, whereas description field, which could be longer is of type `text`. See [data types in SQLite](https://www.sqlite.org/datatype3.html).
+
+Try out the form now and make any edit and submit the form. The update is applied, and the controller attempts to redirect to the show path, eg: `http://localhost:3000/admin/publications/1` but get error `Template is missing`.
+
+Implement show view in admin path - for now, just copy over implementation from regular publications path:
+
+```erb
+<!-- subscription-app/app/views/admin/publications/show.html.erb -->
+<h2>Admin Publication Details</h2>
+
+<div class="panel panel-default">
+  <div class="panel-heading">
+    <h3 class="panel-title"><%= @publication.title %></h3>
+  </div>
+  <div class="panel-body">
+    <p><%= @publication.title %></p>
+    <p><%= @publication.file_url %></p>
+  </div>
+</div>
+```
+
+Update admin publications index view so an admin can create a new application by adding a link (styled as a button) to the new admin path (view not created yet):
+
+```erb
+<!-- subscription-app/app/views/admin/publications/index.html.erb -->
+<h2>Admin Publications</h2>
+
+<%= link_to "New Publication", new_admin_publication_path, class: "btn btn-primary" %>
+
+<% @publications.each do |publication| %>
+  <!-- ... -->
+<% end %>
+```
+
+Admin publications view `http://localhost:3000/admin/publications` now looks like this:
+
+![link to new pub](doc-images/link-to-new-pub.png "link to new pub")
+
+Where rendered html for New Publication link/button is:
+
+```htm
+<a class="btn btn-primary" href="/admin/publications/new">New Publication</a>
+```
+
+Add a view for `/admin/publications/new` so that we can actually use the new button. Paste in code from edit view because the forms for new and edit are almost the same, with a few changes:
+
+* Change title to simply say "New Publication" rather than referencing title of exisitng publication.
+* Change url form will post to create path rather than update path.
+* Change text on submit button to say Create rather than Update publication.
+
+```erb
+<!-- subscription-app/app/views/admin/publications/new.html.erb -->
+<h3>New Publication</h3>
+
+<%= form_for @publication, url: admin_publications_path do |f| %>
+  <div class="form-group">
+    <label>Title</label>
+    <%= f.text_field :title, class: 'form-control' %>
+  </div>
+  <div class="form-group">
+    <label>Description</label>
+    <%= f.text_area :description, class: 'form-control' %>
+  </div>
+  <div class="form-group">
+    <label>File URL</label>
+    <%= f.text_field :file_url, class: 'form-control' %>
+  </div>
+  <div class="form-group">
+    <%= f.submit "Create Publication", class: 'btn btn-primary' %>
+  </div>
+<% end %>
+```
+
+New view `http://localhost:3000/admin/publications/new` looks like this:
+
+![new pub form](doc-images/new-pub-form.png "new pub form")
+
+After filling it out and submitting, redirects to admin listing view `http://localhost:3000/admin/publications`:
+
+![admin pub list](doc-images/admin-pub-list.png "admin pub list")
+
+Newly created subscriptions should also show up in subscriber (i.e. non admin) path `http://localhost:3000/publications`:
+
+![subscriber pub listing](doc-images/subscriber-pub-listing.png "subscriber pub listing")
+
+## Introduce the Stripe API
+
+Stripe: Payment processor with subscription API. They provide a Ruby gem for integration into Ruby apps. We'll also need to securely store the access keys.
+
+Other payment processors include: PayPal and Authorize.Net. Stripe is newer than these, well known for good developer experience, ease of use, good docs.
+
+When taking credit card payments, need to be PCI compliant, which is time consuming to build, but Stripe is compliant.
+
+**Subscription API Feature**
+
+* Recurring charges on a schedule
+* Stores cc info (app only needs to persist is stripe token and stripe customer id)
+* Extras like coupons, trials, etc. (eg: 50% off first month or first month free)
+
+**App Integration**
+
+* Add Stripe ruby gem
+* Get API keys from Stripe dashboard
+* Use `dotenv` to store keys
+* Test API in Rails console
+
+Create a Stripe account. If you don't register a business for real, you'll be in Test Mode (should be fine for this course?).
+
+From [Dashboard](https://dashboard.stripe.com/test/dashboard), click on Developers, then [API keys](https://dashboard.stripe.com/test/apikeys). Displays Publishable key and Secret key. Use the test versions rather than live for this course.
+
+[Subscriptions view](https://dashboard.stripe.com/test/subscriptions) is different than from when instructor created course. Somewhere it should show Plans but don't see it. I think its changed to creating a new Product, of type Recurring: https://dashboard.stripe.com/test/products/create
+
+Left at 1:14 of Stripe and the Subscription API.

@@ -1,5 +1,7 @@
 <h2>Admin Publications</h2>
 
+<%= link_to "New Publication", new_admin_publication_path, class: "btn btn-primary" %>
+
 <% @publications.each do |publication| %>
   <div class="panel panel-default">
     <div class="panel-heading">
