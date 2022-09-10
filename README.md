@@ -13,6 +13,8 @@
   - [Publication Model](#publication-model)
     - [Admin and Subscriber Modelling](#admin-and-subscriber-modelling)
   - [Introduce the Stripe API](#introduce-the-stripe-api)
+    - [Integrating Stripe and Dotenv](#integrating-stripe-and-dotenv)
+  - [Adding Subscriptions](#adding-subscriptions)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
@@ -892,6 +894,124 @@ Create a Stripe account. If you don't register a business for real, you'll be in
 
 From [Dashboard](https://dashboard.stripe.com/test/dashboard), click on Developers, then [API keys](https://dashboard.stripe.com/test/apikeys). Displays Publishable key and Secret key. Use the test versions rather than live for this course.
 
-[Subscriptions view](https://dashboard.stripe.com/test/subscriptions) is different than from when instructor created course. Somewhere it should show Plans but don't see it. I think its changed to creating a new Product, of type Recurring: https://dashboard.stripe.com/test/products/create
+[Subscriptions view](https://dashboard.stripe.com/test/subscriptions) is different than from when instructor created course. Somewhere it should show Plans but don't see it. I think its changed to creating a new [Product](https://dashboard.stripe.com/test/products/create), of type Recurring. Create a $9/month product:
 
-Left at 1:14 of Stripe and the Subscription API.
+![stripe product](doc-images/stripe-product.png "stripe product")
+
+[Subscription Docs](https://stripe.com/docs/billing/subscriptions/overview) - much changed from instructor's version, no more plans:
+
+> With Subscriptions, customers make recurring payments for access to a product. Subscriptions require you to retain more information about your customers than one-time purchases do because you need to charge customers in the future.
+
+Actually [Plans Docs](https://stripe.com/docs/api/plans?lang=ruby) now says:
+
+> You can now model subscriptions more flexibly using the Prices API. It replaces the Plans API and is backwards compatible to simplify your migration.
+
+[Subscriptions API](https://stripe.com/docs/api/subscriptions/object?lang=ruby) Code samples filled in with developer `api_key` if you're logged in.
+
+We need to be able to subscribe a customer to a "plan" (I guess the product we built earlier?). Actually the item is identified by the price_id, which shows up in the Stripe dashboard if you click on the Product you created earlier:
+
+```ruby
+require "stripe"
+Stripe.api_key = "your api key"
+
+Stripe::Subscription.create({
+  customer: "cus_some_customer_id",
+  items: [
+    {price: "price_some_price_id"},
+  ],
+})
+```
+
+So this means we first need to create a [customer](https://stripe.com/docs/api/customers?lang=ruby):
+
+```ruby
+require 'stripe'
+Stripe.api_key = "your api key"
+
+Stripe::Customer.create({
+  description: "My First Test Customer (created for API docs at https://www.stripe.com/docs/api)",
+})
+```
+
+Response will include customer id, we'll need to save it in our app database so can make future API calls with customer id.
+
+Instructor's version has a `source` attribute that is a Stripe token representing customer's credit card but that's not in current docs.
+
+[Create a card](https://stripe.com/docs/api/cards/create?lang=ruby) docs specify to `create_source`:
+
+```ruby
+require "stripe"
+Stripe.api_key = "your api key"
+
+Stripe::Customer.create_source(
+  'cus_some_id',
+  {source: 'tok_visa'},
+)
+```
+
+### Integrating Stripe and Dotenv
+
+See [Stripe Libraries](https://stripe.com/docs/libraries) for server side libraries and also [Quickstart Ruby](https://stripe.com/docs/development/quickstart/ruby)
+
+Add stripe gem to Gemfile:
+
+```
+# Subscriptions and Payments
+gem 'stripe'
+```
+
+Then run `bundle install`. I got `Installing stripe 7.1.0`.
+
+[stripe-ruby on Github](https://github.com/stripe/stripe-ruby)
+
+[Stripe Ruby API Docs](https://stripe.com/docs/api?lang=ruby)
+
+To get started in Rails, specify the stripe API key (we're in test mode) in an initializer, which will run every time Rails server or console is started:
+
+```ruby
+# subscription-app/config/initializers/stripe.rb
+Stripe.api_key = 'your test api key'
+```
+
+Let's try out the simplest API call in Rails console to test the configuration. [List all products](https://stripe.com/docs/api/products/list?lang=ruby) - should return the one product created earlier.
+
+```ruby
+products = Stripe::Product.list({limit: 3})
+product = products.first
+#<Stripe::Product:0x409c id=prod_some_id> JSON: {...
+product.name
+#=> "Subscription App Bronze Plan"
+product.description
+#=> "Learning Rails and Stripe API with Pluralsight."
+product.default_price
+#=> "price_id_of_product"
+```
+
+Add [dotenv](https://github.com/bkeepers/dotenv) to avoid committing Stripe API key.
+
+> Shim to load environment variables from .env into ENV in development.
+
+As per docs, add this to top of Gemfile and `bundle install`:
+
+```
+gem 'dotenv-rails', groups: [:development, :test]
+```
+
+Add `.env` file at project root:
+
+```
+STRIPE_API_KEY=sk_test_your_key
+```
+
+Add `.env` to `.gitignore` so that the app secrets will not get committed.
+
+Modify stripe config initializer to use env var rather than hard-coded key:
+
+```ruby
+# subscription-app/config/initializers/stripe.rb
+Stripe.api_key = ENV['STRIPE_API_KEY']
+```
+
+Launch Rails console and try to retrieve Stripe products just like before. Should get same results.
+
+## Adding Subscriptions
