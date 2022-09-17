@@ -3,6 +3,7 @@
 **Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
 
 - [Integrating Payments with Rails](#integrating-payments-with-rails)
+  - [Test users](#test-users)
   - [Getting Started](#getting-started)
     - [App Overview](#app-overview)
     - [Initializing Sample App](#initializing-sample-app)
@@ -35,6 +36,11 @@ rails --version
 ```
 
 (instructor using rails 4.1.2)
+
+## Test users
+
+* test1@test.com/123456
+* subscription_admin@test.com/password
 
 ## Getting Started
 
@@ -1127,3 +1133,87 @@ u.subscription
 ```
 
 ### Creating the User Info Screen
+
+Build an input screen to collect user's credit card payment info. Do this with a users controller, and `info` method for users to manage their details:
+
+```
+bin/rails generate controller users info
+```
+
+Note that when you pass in method(s) to the controller generator, it also generates views:
+
+```
+create  app/controllers/users_controller.rb
+ route  get 'users/info'
+invoke  erb
+create    app/views/users
+create    app/views/users/info.html.erb
+invoke  test_unit
+create    test/controllers/users_controller_test.rb
+invoke  helper
+create    app/helpers/users_helper.rb
+invoke    test_unit
+invoke  assets
+invoke    scss
+create      app/assets/stylesheets/users.scss
+```
+
+Edit the users info view, just to verify current user is defined:
+
+```erb
+<!-- subscription-app/app/views/users/info.html.erb -->
+<h1>Users#info</h1>
+<%= current_user.email %>
+```
+
+Note that the generator updated the routes file so we can navigate to this view. But rather than using `resources`, use `get` because only exposing this one method/route:
+
+```ruby
+# subscription-app/config/routes.rb
+Rails.application.routes.draw do
+# these two lines are equivalent
+get 'users/info'
+# get 'users/info', to: 'users#info"
+
+devise_for :users
+root to: "home#index"
+resources :publications, only: [:index, :show]
+namespace :admin do
+  resources :publications
+end
+```
+
+Try it by starting server with `bin/rails s` and navigating to `http://localhost:3000/users/info`. If you're still logged in, page works:
+
+![users info signed in](doc-images/users-info-signed-in.png "users info signed in")
+
+But if log out and then try to navigate to `/users/info`, get error because `current_user` is nil and trying to invoke `email` method on `nil`:
+
+![users info error](doc-images/users-info-error.png "users info error")
+
+To fix, need to check if a current user is logged in before trying to display info. Recall in admin controller using `before_action :check_for_admin` to ensure user is an admin before being allowed to execute admin actions. Use a similar technique for regular users navigating to users/info view.
+
+Use devise helper [authenticate_user!](https://github.com/heartcombo/devise#controller-filters-and-helpers), which will redirect to `/users/sign_in` if there isn't a currently signed in user. Then after user successfully signs in, it redirects them to `/users/info` where they were trying to go in the first place:
+
+```ruby
+class UsersController < ApplicationController
+  before_action :authenticate_user!
+
+  def info
+  end
+end
+```
+
+Update nav so that users can easily navigate to their info page. Replace static text "currently signed in as..." with link to `/users/info` view, displaying email address as the link text:
+
+```erb
+<!-- subscription-app/app/views/application/_nav.html.erb -->
+<ul class="nav navbar-nav navbar-right">
+  <% if user_signed_in? %>
+    <li>
+      <%= link_to current_user.email, users_info_path %>
+    </li>
+    ...
+```
+
+Left at 3:07
