@@ -18,6 +18,9 @@
   - [Adding Subscriptions](#adding-subscriptions)
     - [Creating the Subscription Model](#creating-the-subscription-model)
     - [Creating the User Info Screen](#creating-the-user-info-screen)
+    - [Adding Stripe.js](#adding-stripejs)
+      - [Troubleshooting Webpacker](#troubleshooting-webpacker)
+      - [Stripe and Subscriptions](#stripe-and-subscriptions)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
@@ -1216,4 +1219,117 @@ Update nav so that users can easily navigate to their info page. Replace static 
     ...
 ```
 
-Left at 3:07
+Update user info page to display subscription info.
+
+First set subscription instance var in users controller:
+
+```ruby
+# subscription-app/app/controllers/users_controller.rb
+class UsersController < ApplicationController
+  before_action :authenticate_user!
+
+  def info
+    @subscription = current_user.subscription
+  end
+end
+```
+
+Update user info view to display subscription status:
+
+```erb
+<!-- subscription-app/app/views/users/info.html.erb -->
+<h1>Users#info</h1>
+<%= current_user.email %>
+<%= @subscription.active %>
+```
+
+Refresh `http://localhost:3000/users/info`, shows false for subscription status:
+
+![user info subscription status](doc-images/user-info-subscription-status.png "user info subscription status")
+
+Use subscription status boolean to show different information in the user info view:
+
+```erb
+<!-- subscription-app/app/views/users/info.html.erb -->
+<h1>Users#info</h1>
+<%= current_user.email %>
+<% if @subscription.active %>
+  subscribed
+<% else %>
+  unsubscribed
+<% end %>
+```
+
+### Adding Stripe.js
+
+Things have changed with Stripe A LOT since this course.
+
+Add Stripe js script tag to user info view (doesn't work from main application view), and also add `javascript_pack_tag` pointing to some custom Javascript:
+
+```erb
+<script src="https://js.stripe.com/v3/"></script>
+<h1>Account for <%= current_user.email %></h1>
+<% if @subscription.active %>
+  <h2>You are subscribed to...</h2>
+<% else %>
+  <h2>Begin your $9.99 a month subscription</h2>
+  <p>Stripe billing TBD...</p>
+<% end %>
+
+<%= javascript_pack_tag 'src/user' %>
+```
+
+Add custom Javascript - just some temp debug and to ensure Stripe.js was successfully loaded. Note that it's fine to expose the Stripe publishable key, this will be visible in browser requests to Stripe:
+
+```javascript
+// subscription-app/app/javascript/packs/src/user.js
+
+// temp debug
+console.log("=== USER JS LOADED")
+
+// would be nice if could get this from server configured ENV['STRIPE_PUBLIC_KEY']
+const stripe = Stripe("pk_test_51LedmsF96LECznkNClct0c8ChZ9vdfheGYdBggXLcNlbn53q3GQc6xrSzHAFNMjVIMl5pnxrYzDCowkB9h8pTItW00n358I48H");
+```
+
+Navigate to `http://localhost:3000/users/info`. Rails server output should show that Webpacker ran, adding `src/user` js to bundle:
+
+```
+[Webpacker] Compiling...
+[Webpacker] Compiled all packs in /Users/dbaron/projects/pluralsight/payments-rails-pluralsight/subscription-app/public/packs
+[Webpacker] Hash: 6192c633d6ffe1042447
+Version: webpack 4.46.0
+Time: 1428ms
+Built at: 2022-10-03 6:27:03 a.m.
+                                     Asset       Size       Chunks                         Chunk Names
+    js/application-2e212f7c8f867558ac6e.js    121 KiB  application  [emitted] [immutable]  application
+js/application-2e212f7c8f867558ac6e.js.map    136 KiB  application  [emitted] [dev]        application
+       js/src/user-d99439d56bdc0759f6cc.js   4.13 KiB     src/user  [emitted] [immutable]  src/user
+   js/src/user-d99439d56bdc0759f6cc.js.map   3.86 KiB     src/user  [emitted] [dev]        src/user
+                             manifest.json  682 bytes               [emitted]
+Entrypoint application = js/application-2e212f7c8f867558ac6e.js js/application-2e212f7c8f867558ac6e.js.map
+Entrypoint src/user = js/src/user-d99439d56bdc0759f6cc.js js/src/user-d99439d56bdc0759f6cc.js.map
+[./app/javascript/channels sync recursive _channel\.js$] ./app/javascript/channels sync _channel\.js$ 160 bytes {application} [built]
+[./app/javascript/channels/index.js] 211 bytes {application} [built]
+[./app/javascript/packs/application.js] 492 bytes {application} [built]
+[./app/javascript/packs/src/user.js] 264 bytes {src/user} [built]
+    + 3 hidden modules
+```
+
+Browser looks like this:
+
+![user info stripe scaffolding](doc-images/user-info-stripe-scaffolding.png "user info stripe scaffolding")
+
+Browser devtools console should have:
+
+```
+=== USER JS LOADED
+You may test your Stripe.js integration over HTTP. However, live Stripe.js integrations must use HTTPS.
+```
+
+#### Troubleshooting Webpacker
+
+If get errors that the custom user js file can't be found in the manifest, try running `bin/webpack-dev-server` in another terminal tab, when added a custom .js file to packs dir: https://edgeguides.rubyonrails.org/webpacker.html
+
+#### Stripe and Subscriptions
+
+Instead of what instructor is doing which seems to be no longer supported by Stripe, try [Prebuilt subscription page with Stripe Checkout](https://stripe.com/docs/billing/quickstart).
