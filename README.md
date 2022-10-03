@@ -18,6 +18,7 @@
   - [Adding Subscriptions](#adding-subscriptions)
     - [Creating the Subscription Model](#creating-the-subscription-model)
     - [Creating the User Info Screen](#creating-the-user-info-screen)
+    - [Adding Stripe.js](#adding-stripejs)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
@@ -1216,4 +1217,62 @@ Update nav so that users can easily navigate to their info page. Replace static 
     ...
 ```
 
-Left at 3:07
+Update user info page to display subscription info.
+
+First set subscription instance var in users controller:
+
+```ruby
+# subscription-app/app/controllers/users_controller.rb
+class UsersController < ApplicationController
+  before_action :authenticate_user!
+
+  def info
+    @subscription = current_user.subscription
+  end
+end
+```
+
+Update user info view to display subscription status:
+
+```erb
+<!-- subscription-app/app/views/users/info.html.erb -->
+<h1>Users#info</h1>
+<%= current_user.email %>
+<%= @subscription.active %>
+```
+
+Refresh `http://localhost:3000/users/info`, shows false for subscription status:
+
+![user info subscription status](doc-images/user-info-subscription-status.png "user info subscription status")
+
+Use subscription status boolean to show different information in the user info view:
+
+```erb
+<!-- subscription-app/app/views/users/info.html.erb -->
+<h1>Users#info</h1>
+<%= current_user.email %>
+<% if @subscription.active %>
+  subscribed
+<% else %>
+  unsubscribed
+<% end %>
+```
+
+### Adding Stripe.js
+
+If user is unsubscribed, then want to collect their credit card payment info on the users info view. Will use Stripe.js to collect info from browser and send directly to Stripe, so will never pass through the Rails server.
+
+Tutorial referred to by instructor no longer exists on Stripe docs. Things have changed, need to first create PaymentIntent (endpoint on server).
+
+Try this instead:
+* https://stripe.com/docs/libraries/stripejs-esmodule
+* https://stripe.com/docs/payments/elements
+* https://stripe.com/docs/payments/payment-element
+* https://stripe.com/docs/payments/quickstart
+
+Had to run `bin/webpack-dev-server` in another terminal tab, when added a custom .js file to packs dir: https://edgeguides.rubyonrails.org/webpacker.html
+
+Note that the Stripe publishable key is ok to commit to source control and use in client side JavaScript.
+
+OR maybe need to use subscription/billing specific feature of Stripe which is different than payments for a one-time product purchase:
+https://stripe.com/docs/billing/quickstart
