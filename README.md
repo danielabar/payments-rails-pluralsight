@@ -43,6 +43,7 @@ rails --version
 ## Test users
 
 * test1@test.com/123456
+* test2@test.com/123456
 * subscription_admin@test.com/password
 
 ## Getting Started
@@ -1333,3 +1334,11 @@ If get errors that the custom user js file can't be found in the manifest, try r
 #### Stripe and Subscriptions
 
 Instead of what instructor is doing which seems to be no longer supported by Stripe, try [Prebuilt subscription page with Stripe Checkout](https://stripe.com/docs/billing/quickstart).
+
+Do not use [Custom payment flow](https://stripe.com/docs/payments/quickstart), that seems to be for a one-time physical product purchase.
+
+Should also store subscription id:
+
+```
+bin/rails generate migration AddStripeSubscriptionIdToSubscriptions stripe_subscription_id:string
+```

@@ -1,10 +1,14 @@
+<script src="https://polyfill.io/v3/polyfill.min.js?version=3.52.1&features=fetch"></script>
 <script src="https://js.stripe.com/v3/"></script>
 <h1>Account for <%= current_user.email %></h1>
 <% if @subscription.active %>
-  <h2>You are subscribed to...</h2>
+  <h2>You are subscribed to <%= @product[:name] %></h2>
+  <p><%= @product[:description] %></p>
+  <p>Renews on: <%= @subscription_info[:renews_on] %></p>
+  <%# Nice to have: link to manage sub/payment-info %>
 <% else %>
   <h2>Begin your $9.99 a month subscription</h2>
-  <p>Stripe billing TBD...</p>
+  <%= render "checkout" %>
 <% end %>
 
 <%= javascript_pack_tag 'src/user' %>
