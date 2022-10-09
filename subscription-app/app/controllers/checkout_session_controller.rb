@@ -1,3 +1,4 @@
+# Better name: StripeSessionController?
 class CheckoutSessionController < ApplicationController
   # FIXME: Shouldn't need this, add CSRF token to _checkout.html.erb
   skip_before_action :verify_authenticity_token
@@ -15,6 +16,22 @@ class CheckoutSessionController < ApplicationController
         }],
         success_url: "#{request.base_url}/users/charge?session_id={CHECKOUT_SESSION_ID}",
         cancel_url: "#{request.base_url}/users/info",
+      })
+      redirect_to session.url, status: 303
+    rescue StandardError => e
+      payload = { 'error': { message: e.error.message } }
+      render :json => payload, :status => :bad_request
+    end
+  end
+
+  # what if there is no current_user?
+  # does Stripe provide any params on return_url so we can know if user cancelled their subscription?
+  # maybe the only way to know is to implement webhooks
+  def create_portal_session
+    begin
+      session = Stripe::BillingPortal::Session.create({
+        customer: current_user.subscription.stripe_user_id,
+        return_url: "#{request.base_url}/users/info"
       })
       redirect_to session.url, status: 303
     rescue StandardError => e

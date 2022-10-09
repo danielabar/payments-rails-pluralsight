@@ -5,7 +5,7 @@
   <h2>You are subscribed to <%= @product[:name] %></h2>
   <p><%= @product[:description] %></p>
   <p>Renews on: <%= @subscription_info[:renews_on] %></p>
-  <%# Nice to have: link to manage sub/payment-info %>
+  <%= render "manage_billing" %>
 <% else %>
   <h2>Begin your $9.99 a month subscription</h2>
   <%= render "checkout" %>

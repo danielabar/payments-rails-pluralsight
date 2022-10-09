@@ -6,6 +6,9 @@ class UsersController < ApplicationController
     @subscription = current_user.subscription
     if @subscription.stripe_subscription_id.present?
       ss = Stripe::Subscription.retrieve(@subscription.stripe_subscription_id)
+      # temp debug
+      pp ss
+      # TODO: Check subscription canceled_at, if populated, let customer know their plan will cancel on that date
       stripe_product = Stripe::Product.retrieve(ss.items.data.first.plan.product)
       @product = {
         name: stripe_product.name,
