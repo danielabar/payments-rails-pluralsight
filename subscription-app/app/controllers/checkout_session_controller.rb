@@ -13,7 +13,7 @@ class CheckoutSessionController < ApplicationController
           quantity: 1,
           price: prices.data[0].id
         }],
-        success_url: "#{request.base_url}/users/info?session_id={CHECKOUT_SESSION_ID}",
+        success_url: "#{request.base_url}/users/charge?session_id={CHECKOUT_SESSION_ID}",
         cancel_url: "#{request.base_url}/users/info",
       })
       redirect_to session.url, status: 303

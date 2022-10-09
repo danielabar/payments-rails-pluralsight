@@ -1342,3 +1342,9 @@ Should also store subscription id:
 ```
 bin/rails generate migration AddStripeSubscriptionIdToSubscriptions stripe_subscription_id:string
 ```
+
+Debug: Check in console on current state of user subscriptions:
+
+```ruby
+Subscription.includes(:user).all.each{ |s| puts "#{s.user.email}, #{s.stripe_user_id}, #{s.stripe_subscription_id}" }
+```
