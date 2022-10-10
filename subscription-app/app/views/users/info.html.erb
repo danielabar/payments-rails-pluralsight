@@ -4,7 +4,12 @@
 <% if @subscription.active %>
   <h2>You are subscribed to <%= @product[:name] %></h2>
   <p><%= @product[:description] %></p>
-  <p>Renews on: <%= @subscription_info[:renews_on] %></p>
+  <% if @subscription_info[:canceled_at].present? %>
+    <p>You requested cancellation on: <%= @subscription_info[:canceled_at] %></p>
+    <p>You can keep using the subscription up until: <%= @subscription_info[:renews_on] %></p>
+  <% else %>
+    <p>Renews on: <%= @subscription_info[:renews_on] %></p>
+  <% end %>
   <%= render "manage_billing" %>
 <% else %>
   <h2>Begin your $9.99 a month subscription</h2>

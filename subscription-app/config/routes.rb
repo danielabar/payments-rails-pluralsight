@@ -4,6 +4,7 @@ Rails.application.routes.draw do
   # User self management
   get 'users/info'
   get 'users/charge'
+  get 'users/manage'
 
   # Stripe
   post '/create-checkout-session', to: 'checkout_session#create'
