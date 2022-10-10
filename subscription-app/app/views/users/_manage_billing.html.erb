@@ -1,5 +1,5 @@
 <section>
-  <form action="/create-portal-session" method="POST">
-    <button id="checkout-and-portal-button" type="submit">Manage your billing information</button>
-  </form>
+  <%= form_with url: "/create-portal-session" do |form| %>
+    <%= form.submit "Manage your billing information" %>
+  <% end %>
 </section>

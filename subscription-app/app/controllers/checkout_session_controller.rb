@@ -1,8 +1,5 @@
 # Better name: StripeSessionController?
 class CheckoutSessionController < ApplicationController
-  # FIXME: Shouldn't need this, add CSRF token to _checkout.html.erb
-  skip_before_action :verify_authenticity_token
-
   def create
     begin
       prices = Stripe::Price.list(expand: ['data.product'])

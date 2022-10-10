@@ -1351,7 +1351,6 @@ Subscription.includes(:user).all.each{ |s| puts "#{s.user.email}, #{s.stripe_use
 
 **TODO**
 
-* CSRF token on user partial forms and remove skip_before_action on session controller
 * hydrate subscription model from stripe to show more info on user/info view
 * get product name from stripe rather than hard coding
 * is stripe.js and publishable key even needed?
