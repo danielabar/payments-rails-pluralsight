@@ -21,6 +21,7 @@
     - [Adding Stripe.js](#adding-stripejs)
       - [Troubleshooting Webpacker](#troubleshooting-webpacker)
       - [Stripe and Subscriptions](#stripe-and-subscriptions)
+      - [Publication Access](#publication-access)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
@@ -1349,8 +1350,165 @@ Debug: Check in console on current state of user subscriptions:
 Subscription.includes(:user).all.each{ |s| puts "#{s.user.email}, #{s.stripe_user_id}, #{s.stripe_subscription_id}" }
 ```
 
-**TODO**
+**Nice to have:**
 
 * hydrate subscription model from stripe to show more info on user/info view
 * get product name from stripe rather than hard coding
 * is stripe.js and publishable key even needed?
+
+**Project Files Modified for Integrating Stripe Subscriptions**
+
+Stripe Session Controller is for making requests to redirect to Stripe. Give it various url's back to the Rails app so it knows where to send user back to after they've completed actions on Stripe such as paying for a subscription, managing billing, or cancelling subscription:
+
+```ruby
+# subscription-app/app/controllers/checkout_session_controller.rb
+# Better name: StripeSessionController?
+class CheckoutSessionController < ApplicationController
+  def create
+    begin
+      prices = Stripe::Price.list(expand: ['data.product'])
+      session = Stripe::Checkout::Session.create({
+        mode: 'subscription',
+        line_items: [{
+          quantity: 1,
+          price: prices.data[0].id
+        }],
+        success_url: "#{request.base_url}/users/charge?session_id={CHECKOUT_SESSION_ID}",
+        cancel_url: "#{request.base_url}/users/info",
+      })
+      redirect_to session.url, status: 303
+    rescue StandardError => e
+      payload = { 'error': { message: e.error.message } }
+      render :json => payload, :status => :bad_request
+    end
+  end
+
+  def create_portal_session
+    begin
+      session = Stripe::BillingPortal::Session.create({
+        customer: current_user.subscription.stripe_user_id,
+        return_url: "#{request.base_url}/users/manage"
+      })
+      redirect_to session.url, status: 303
+    rescue StandardError => e
+      payload = { 'error': { message: e.error.message } }
+      render :json => payload, :status => :bad_request
+    end
+  end
+end
+```
+
+User info view displays subscription details with a partial to manage billing, or a partial to checkout (to start subscription):
+
+```erb
+<!-- subscription-app/app/views/users/info.html.erb -->
+<script src="https://polyfill.io/v3/polyfill.min.js?version=3.52.1&features=fetch"></script>
+<script src="https://js.stripe.com/v3/"></script>
+<h1>Account for <%= current_user.email %></h1>
+<% if @subscription.active %>
+  <h2>You are subscribed to <%= @product[:name] %></h2>
+  <p><%= @product[:description] %></p>
+  <% if @subscription_info[:canceled_at].present? %>
+    <p>You requested cancellation on: <%= @subscription_info[:canceled_at] %></p>
+    <p>You can keep using the subscription up until: <%= @subscription_info[:renews_on] %></p>
+  <% else %>
+    <p>Renews on: <%= @subscription_info[:renews_on] %></p>
+  <% end %>
+  <%= render "manage_billing" %>
+<% else %>
+  <h2>Begin your $9.99 a month subscription</h2>
+  <%= render "checkout" %>
+<% end %>
+
+<%= javascript_pack_tag 'src/user' %>
+```
+
+Checkout partial renders form to create checkout session on Stripe. Notice use of `form_with` helper will automatically generate CSRF token:
+
+```erb
+<!-- subscription-app/app/views/users/_checkout.html.erb -->
+<section>
+  <div class="product">
+    <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="14px" height="16px" viewBox="0 0 14 16" version="1.1">
+        <defs/>
+        <g id="Flow" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+            <g id="0-Default" transform="translate(-121.000000, -40.000000)" fill="#E184DF">
+                <path d="M127,50 L126,50 C123.238576,50 121,47.7614237 121,45 C121,42.2385763 123.238576,40 126,40 L135,40 L135,56 L133,56 L133,42 L129,42 L129,56 L127,56 L127,50 Z M127,48 L127,42 L126,42 C124.343146,42 123,43.3431458 123,45 C123,46.6568542 124.343146,48 126,48 L127,48 Z" id="Pilcrow"/>
+            </g>
+        </g>
+    </svg>
+    <div class="description">
+      <!-- TODO: Should come from controller instance vars rather than hard-coded here -->
+      <h3>Subscription App Bronze Plan</h3>
+      <h5>$9.00 CAD / month</h5>
+    </div>
+  </div>
+  <%= form_with url: "/create-checkout-session" do |form| %>
+    <%= form.submit "Checkout" %>
+  <% end %>
+</section>
+```
+
+Manage billing partial renders form to create a "portal" session on Stripe, which allows user to manage their billing info, view their invoices and cancel the subscription:
+
+```erb
+<!-- subscription-app/app/views/users/_manage_billing.html.erb -->
+<%= form_with url: "/create-portal-session" do |form| %>
+  <%= form.submit "Manage your billing information" %>
+<% end %>
+```
+
+Users controller `info` method retrieves subscription and product details from Stripe if a subscription is active. `charge` method is the callback after user has completed paying for a subscription. `manage` is callback from user managing their info in Stripe. Here we check if user has requested subscription cancellation:
+
+```ruby
+# subscription-app/app/controllers/users_controller.rb
+class UsersController < ApplicationController
+  before_action :authenticate_user!
+
+  def info
+    @subscription = current_user.subscription
+    if @subscription.stripe_subscription_id.present?
+      ss = Stripe::Subscription.retrieve(@subscription.stripe_subscription_id)
+      stripe_product = Stripe::Product.retrieve(ss.items.data.first.plan.product)
+      @product = {
+        name: stripe_product.name,
+        description: stripe_product.description
+      }
+      @subscription_info = {
+        renews_on: Time.at(ss.current_period_end).strftime("%Y-%m-%d"),
+        canceled_at: ss.canceled_at.present? ? Time.at(ss.canceled_at).strftime("%Y-%m-%d") : nil
+      }
+    end
+  end
+
+  def charge
+    stripe_session_id = params[:session_id]
+    if stripe_session_id
+      puts "Redirected here from Stripe subscription signup: #{stripe_session_id}"
+      stripe_session = Stripe::Checkout::Session.retrieve(stripe_session_id)
+      current_user.subscription.update(
+        stripe_user_id: stripe_session.customer,
+        stripe_subscription_id: stripe_session.subscription,
+        active: true
+      )
+      redirect_to :users_info, notice: "Subscription to Bronze Plan successful!"
+    end
+  end
+
+  def manage
+    @subscription = current_user.subscription
+    ss = Stripe::Subscription.retrieve(@subscription.stripe_subscription_id)
+    if ss.canceled_at.present?
+      # at some point need to set subscription to inactive but only at period end, either webhooks or background processing/cron?
+      # current_user.subscription.update(active: false)
+      redirect_to :users_info, notice: "Request to cancel subscription received"
+    else
+      redirect_to :users_info
+    end
+  end
+end
+```
+
+#### Publication Access
+
+Need to make use of subscriptions to control access to publications.
