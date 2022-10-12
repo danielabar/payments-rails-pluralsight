@@ -22,6 +22,8 @@
       - [Troubleshooting Webpacker](#troubleshooting-webpacker)
       - [Stripe and Subscriptions](#stripe-and-subscriptions)
       - [Publication Access](#publication-access)
+  - [Summary](#summary)
+    - [Next Steps](#next-steps)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
@@ -1512,3 +1514,51 @@ end
 #### Publication Access
 
 Need to make use of subscriptions to control access to publications.
+
+Recall the publications index view allows any user to view the listing, but the show view is intended to be more specific, and only allow subscribed (i.e. paying) users to view the details.
+
+Implement this with [before_action filter](https://guides.rubyonrails.org/action_controller_overview.html#filters) on publications controller, but only for the show method. This method will check if there's a currently logged in user and if they have an active subscription:
+
+```ruby
+# subscription-app/app/controllers/publications_controller.rb
+class PublicationsController < ApplicationController
+  before_action :check_subscription, only: [:show]
+
+  def index
+    @publications = Publication.all
+  end
+
+  def show
+    @publication = Publication.find(params[:id])
+  end
+
+  def check_subscription
+    unless user_signed_in? && current_user.subscription.active
+      redirect_to publications_path, alert: "You must be a subscriber to view this content."
+    end
+  end
+end
+```
+
+## Summary
+
+App has the following models:
+
+* Users
+* Publications
+* Subscriptions
+
+Users have email/password, with `devise` gem used for authentication.
+
+Publications have title/description/url (very basic for this demo app). Users can subscribe to get access to publication details.
+
+Subscriptions are 1-1 with users. Subscriptions store the stripe customer id and subscription id and active status. Design choice was to ensure user always has a subscription object, so the code can check its active status rather than checking for a `nil` relationship. This is useful in case users subscribe and then unsubscribe. The database can persist their original info and then reactivate an existing subscription.
+
+### Next Steps
+
+Left as exercise for student, look into other Stripe features such as:
+
+* Invoices
+* Coupons
+* Subscription events (webhooks)
+* Trials
